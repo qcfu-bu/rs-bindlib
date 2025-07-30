@@ -1,0 +1,16 @@
+let pair a b f := f a b in
+
+let zero x f := x in
+let succ n x f := f (n x f) in
+
+let nil b f := b in
+let cons x xs b f := f x (xs b f) in
+
+let len xs :=
+    xs 0 (fun _ acc => acc + 1) in
+
+
+
+let xs := cons 1 (cons 2 (cons 3 (cons 4 nil))) in
+let l := len xs in
+l

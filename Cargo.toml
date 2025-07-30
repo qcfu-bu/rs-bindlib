@@ -1,0 +1,26 @@
+[package]
+name = "rs-bindlib"
+version = "0.1.0"
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[profile.dev]
+overflow-checks = false
+opt-level = 3
+
+[profile.release]
+overflow-checks = false
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+debug = true
+
+[dependencies]
+rpmalloc = "0.2.2"
+ahash = "0.8.11"
+itertools = "0.14.0"
+pest = "2.7.9"
+pest_derive = "2.7.9"
+lazy_static = "1.4.0"

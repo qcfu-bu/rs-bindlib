@@ -1,0 +1,57 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+reserved = _{
+  "fun"   ~ WHITESPACE |
+  "let"   ~ WHITESPACE |
+  "in"    ~ WHITESPACE |
+  "if"    ~ WHITESPACE |
+  "then"  ~ WHITESPACE |
+  "else"  ~ WHITESPACE |
+  "true"  ~ WHITESPACE |
+  "false" ~ WHITESPACE
+}
+
+integer = @{ ASCII_DIGIT+ }
+tt       = { "true" }
+ff       = { "false" }
+bool     = { tt | ff }
+var   = @{ !(reserved) ~ ((ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "\'" | "_")*) }
+vars0 = { var* }
+vars1 = { var+ }
+atom  = _{ integer | bool | var }
+
+not    = { "!" }
+neg    = { "-" }
+uni_op = _{ not | neg }
+
+add = { "+" }
+sub = { "-" }
+mul = { "*" }
+div = { "/" }
+lte = { "<=" }
+gte = { ">=" }
+lt  = { "<" }
+gt  = { ">" }
+eq  = { "==" }
+neq = { "!=" }
+and = { "&&" }
+or  = { "||" }
+app = { "" }
+bin_op = _{ 
+  add | sub | mul | div | 
+  lte | gte | lt  | gt  | eq  | neq | 
+  and | or  | 
+  app 
+}
+
+lambda   = { "fun" ~ vars1 ~ "=>" ~ term }
+decl     = { var ~ vars0 ~ ":=" ~ term ~ "in" ~ term }
+decl_rec = { "rec" ~ var ~ var ~ vars0 ~ ":=" ~ term ~ "in" ~ term }
+letin    = { "let" ~ (decl_rec | decl)  }
+ifte     = { "if" ~ term ~ "then" ~ term ~ "else" ~ term }
+parens   = _{ "(" ~ term ~ ")" }
+
+term0 = _{ letin | lambda | ifte | atom | parens }
+term1 = _{ term0 ~ (bin_op ~ term0) * }
+term2 = _{ uni_op? ~ term1 }
+term  = { term2 }
+prog  = _{ SOI ~ term ~ EOI }

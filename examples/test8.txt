@@ -1,0 +1,18 @@
+let succ n f x := f (n f x) in
+let add n m f x := n f (m f x) in
+let mul n m f x := n (m f) x in
+
+let n0 f x := x in
+let n1 := succ n0 in
+let n2 := succ n1 in
+let n3 := succ n2 in
+let n4 := succ n3 in
+let n5 := succ n4 in
+let n10 := mul n5 n2 in
+let n100 := mul n10 n10 in
+let n10k := mul n100 n100 in
+let n1M := mul n10k n100 in
+let n5M := mul n1M n5 in
+let n10M := mul n5M n2 in
+let int_of_num n := n (fun x => x + 1) 0 in
+int_of_num (n10M)

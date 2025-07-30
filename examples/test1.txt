@@ -1,0 +1,17 @@
+let zero f x := x in
+let succ n f x := f (n f x) in
+let add n m f x := n f (m f x) in
+let mul n m f x := n (m f) x in
+let one := succ zero in
+let two := succ one in
+let three := succ two in
+let five := add two three in
+let ten := add five five in
+let fifteen := add ten five in
+let hundred := mul ten ten in
+let fact k :=
+  k (fun p => p (fun a b g => g (fun f x => f (a f x)) (fun f => a (b f))))
+    (fun g => g (fun h => h) (fun h => h)) (fun a b => b)
+in
+let int_of_num n := n (fun x => x + 1) 0 in
+int_of_num (fact ten)

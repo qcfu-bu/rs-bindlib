@@ -1,0 +1,9 @@
+let rec kmccarthy n k :=
+  if n <= 100 then
+    kmccarthy (n + 11) (fun res =>
+      kmccarthy res k)
+  else
+    k (n - 10)
+in 
+let mccarthy n := kmccarthy n (fun x => x) in
+mccarthy 23
