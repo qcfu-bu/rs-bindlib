@@ -12,12 +12,12 @@ use std::{
 
 static STAMP: AtomicUsize = AtomicUsize::new(0);
 
-pub trait AnyPtr {
+pub trait Bound {
     fn into_any(&self) -> Rc<dyn Any>;
     fn from_any(a: Rc<dyn Any>) -> Self;
 }
 
-impl<T: 'static> AnyPtr for Rc<T> {
+impl<T: 'static> Bound for Rc<T> {
     fn into_any(&self) -> Rc<dyn Any> {
         self.clone()
     }
@@ -39,11 +39,11 @@ impl Env {
         }
     }
 
-    fn set<A: AnyPtr + 'static>(&self, i: usize, a: A) {
+    fn set<A: Bound + 'static>(&self, i: usize, a: A) {
         self.tab.borrow_mut()[i] = Some(a.into_any());
     }
 
-    fn get<A: AnyPtr + 'static>(&self, i: usize) -> A {
+    fn get<A: Bound + 'static>(&self, i: usize) -> A {
         let any = self.tab.borrow()[i].clone().unwrap();
         A::from_any(any)
     }
@@ -144,7 +144,7 @@ impl<A> Ord for Var<A> {
     }
 }
 
-impl<A: AnyPtr + Clone + 'static> Var<A> {
+impl<A: Bound + Clone + 'static> Var<A> {
     pub fn new<F>(mk_free: F, name: String) -> Var<A>
     where
         F: Fn(Var<A>) -> A + 'static,
@@ -242,7 +242,7 @@ impl<A: 'static> Boxed<A> {
 
     pub fn unbox(self) -> A
     where
-        A: AnyPtr + Clone,
+        A: Bound + Clone,
     {
         match self.inner {
             BoxedInner::Box(t) => t,
@@ -339,7 +339,7 @@ pub struct Binder<A, B> {
     value: Rc<dyn Fn(A) -> B>,
 }
 
-impl<A: AnyPtr, B> Debug for Binder<A, B>
+impl<A: Bound, B> Debug for Binder<A, B>
 where
     A: Debug + Clone + 'static,
     B: Debug + Clone + 'static,
@@ -353,7 +353,7 @@ where
     }
 }
 
-impl<A: AnyPtr, B> Binder<A, B>
+impl<A: Bound, B> Binder<A, B>
 where
     A: Clone + 'static,
     B: Clone + 'static,
@@ -501,7 +501,7 @@ pub struct MBinder<A, B> {
     value: Rc<dyn Fn(Vec<A>) -> B>,
 }
 
-impl<A: AnyPtr, B> Debug for MBinder<A, B>
+impl<A: Bound, B> Debug for MBinder<A, B>
 where
     A: Debug + Clone + 'static,
     B: Debug + Clone + 'static,
@@ -515,7 +515,7 @@ where
     }
 }
 
-impl<A: AnyPtr, B> MBinder<A, B>
+impl<A: Bound, B> MBinder<A, B>
 where
     A: Clone + 'static,
     B: Clone + 'static,
@@ -855,13 +855,13 @@ where
     fn into_box(self) -> Boxed<A>;
 }
 
-impl<A: AnyPtr + Clone + 'static> IntoBoxed<A> for Var<A> {
+impl<A: Bound + Clone + 'static> IntoBoxed<A> for Var<A> {
     fn into_box(self) -> Boxed<A> {
         self.inner.boxed.clone()
     }
 }
 
-impl<A: AnyPtr, B> IntoBoxed<Binder<A, B>> for Binder<A, Boxed<B>>
+impl<A: Bound, B> IntoBoxed<Binder<A, B>> for Binder<A, Boxed<B>>
 where
     A: Clone + 'static,
     B: Clone + 'static,
@@ -872,7 +872,7 @@ where
     }
 }
 
-impl<A: AnyPtr, B> IntoBoxed<MBinder<A, B>> for MBinder<A, Boxed<B>>
+impl<A: Bound, B> IntoBoxed<MBinder<A, B>> for MBinder<A, Boxed<B>>
 where
     A: Clone + 'static,
     B: Clone + 'static,
