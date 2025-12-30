@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 pub fn eval(m0: Term) -> Term {
     use TermNode::*;
-    match &*m0 {
+    match &*m0.0 {
         Int(_) | Bool(_) | Var(_) => m0.clone(),
         Fun(_) => m0,
         Op1(op1, m) => {
@@ -18,7 +18,7 @@ pub fn eval(m0: Term) -> Term {
         App(m, n) => {
             let m0 = eval(m.clone());
             let n0 = eval(n.clone());
-            if let Fun(bnd) = &*m0 {
+            if let Fun(bnd) = &*m0.0 {
                 let expr = bnd.subst(vec![m0.clone(), n0]);
                 return eval(expr);
             }
@@ -30,7 +30,7 @@ pub fn eval(m0: Term) -> Term {
         }
         Ifte(m, n1, n2) => {
             let m = eval(m.clone());
-            if let Bool(b) = &*m {
+            if let Bool(b) = &*m.0 {
                 if *b {
                     return eval(n1.clone());
                 } else {
@@ -45,9 +45,9 @@ pub fn eval(m0: Term) -> Term {
 fn eval_op1(op: &Op1, m: Term) -> Term {
     use self::Op1::*;
     use TermNode::*;
-    match (op, &*m) {
-        (Not, Bool(b)) => Rc::new(Bool(!b)),
-        (Neg, Int(i)) => Rc::new(Int(-i)),
+    match (op, &*m.0) {
+        (Not, Bool(b)) => Term(Rc::new(Bool(!b))),
+        (Neg, Int(i)) => Term(Rc::new(Int(-i))),
         (_, _) => panic!("eval_op1({:?}, {:?})", op, m),
     }
 }
@@ -55,19 +55,19 @@ fn eval_op1(op: &Op1, m: Term) -> Term {
 fn eval_op2(op: &Op2, m: Term, n: Term) -> Term {
     use self::Op2::*;
     use TermNode::*;
-    match (op, &*m, &*n) {
-        (Add, Int(i), Int(j)) => Rc::new(Int(i + j)),
-        (Sub, Int(i), Int(j)) => Rc::new(Int(i - j)),
-        (Mul, Int(i), Int(j)) => Rc::new(Int(i * j)),
-        (Div, Int(i), Int(j)) => Rc::new(Int(i / j)),
-        (Lte, Int(i), Int(j)) => Rc::new(Bool(i <= j)),
-        (Gte, Int(i), Int(j)) => Rc::new(Bool(i >= j)),
-        (Lt, Int(i), Int(j)) => Rc::new(Bool(i < j)),
-        (Gt, Int(i), Int(j)) => Rc::new(Bool(i > j)),
-        (Eq, Int(i), Int(j)) => Rc::new(Bool(i == j)),
-        (Neq, Int(i), Int(j)) => Rc::new(Bool(i != j)),
-        (And, Bool(i), Bool(j)) => Rc::new(Bool(*i && *j)),
-        (Or, Bool(i), Bool(j)) => Rc::new(Bool(*i || *j)),
+    match (op, &*m.0, &*n.0) {
+        (Add, Int(i), Int(j)) => Term(Rc::new(Int(i + j))),
+        (Sub, Int(i), Int(j)) => Term(Rc::new(Int(i - j))),
+        (Mul, Int(i), Int(j)) => Term(Rc::new(Int(i * j))),
+        (Div, Int(i), Int(j)) => Term(Rc::new(Int(i / j))),
+        (Lte, Int(i), Int(j)) => Term(Rc::new(Bool(i <= j))),
+        (Gte, Int(i), Int(j)) => Term(Rc::new(Bool(i >= j))),
+        (Lt, Int(i), Int(j)) => Term(Rc::new(Bool(i < j))),
+        (Gt, Int(i), Int(j)) => Term(Rc::new(Bool(i > j))),
+        (Eq, Int(i), Int(j)) => Term(Rc::new(Bool(i == j))),
+        (Neq, Int(i), Int(j)) => Term(Rc::new(Bool(i != j))),
+        (And, Bool(i), Bool(j)) => Term(Rc::new(Bool(*i && *j))),
+        (Or, Bool(i), Bool(j)) => Term(Rc::new(Bool(*i || *j))),
         (_, _, _) => panic!("eval_op2({:?}, {:?}, {:?})", op, m, n),
     }
 }

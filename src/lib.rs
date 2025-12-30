@@ -12,21 +12,6 @@ use std::{
 
 static STAMP: AtomicUsize = AtomicUsize::new(0);
 
-pub trait Bound {
-    fn into_any(&self) -> Rc<dyn Any>;
-    fn from_any(a: Rc<dyn Any>) -> Self;
-}
-
-impl<T: 'static> Bound for Rc<T> {
-    fn into_any(&self) -> Rc<dyn Any> {
-        self.clone()
-    }
-
-    fn from_any(a: Rc<dyn Any>) -> Self {
-        unsafe { Rc::from_raw(Rc::into_raw(a) as *mut T) }
-    }
-}
-
 #[derive(Clone)]
 struct Env {
     tab: RefCell<Vec<Option<Rc<dyn Any>>>>,
@@ -39,13 +24,14 @@ impl Env {
         }
     }
 
-    fn set<A: Bound + 'static>(&self, i: usize, a: A) {
-        self.tab.borrow_mut()[i] = Some(a.into_any());
+    fn set<A: Into<Rc<dyn Any>> + 'static>(&self, i: usize, a: A) {
+        let any: Rc<dyn Any> = a.into();
+        self.tab.borrow_mut()[i] = Some(any);
     }
 
-    fn get<A: Bound + 'static>(&self, i: usize) -> A {
-        let any = self.tab.borrow()[i].clone().unwrap();
-        A::from_any(any)
+    fn get<A: From<Rc<dyn Any>> + 'static>(&self, i: usize) -> A {
+        let any: Rc<dyn Any> = self.tab.borrow()[i].clone().unwrap();
+        A::from(any)
     }
 
     fn copy_to(&self, dst: &mut Env, len: usize) {
@@ -144,7 +130,7 @@ impl<A> Ord for Var<A> {
     }
 }
 
-impl<A: Bound + Clone + 'static> Var<A> {
+impl<A: From<Rc<dyn Any>> + 'static> Var<A> {
     pub fn new<F>(mk_free: F, name: String) -> Var<A>
     where
         F: Fn(Var<A>) -> A + 'static,
@@ -242,7 +228,7 @@ impl<A: 'static> Boxed<A> {
 
     pub fn unbox(self) -> A
     where
-        A: Bound + Clone,
+        A: Into<Rc<dyn Any>> + Clone + 'static,
     {
         match self.inner {
             BoxedInner::Box(t) => t,
@@ -339,9 +325,9 @@ pub struct Binder<A, B> {
     value: Rc<dyn Fn(A) -> B>,
 }
 
-impl<A: Bound, B> Debug for Binder<A, B>
+impl<A, B> Debug for Binder<A, B>
 where
-    A: Debug + Clone + 'static,
+    A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Debug + Clone + 'static,
     B: Debug + Clone + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -353,9 +339,9 @@ where
     }
 }
 
-impl<A: Bound, B> Binder<A, B>
+impl<A, B> Binder<A, B>
 where
-    A: Clone + 'static,
+    A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
     B: Clone + 'static,
 {
     #[inline(always)]
@@ -501,9 +487,9 @@ pub struct MBinder<A, B> {
     value: Rc<dyn Fn(Vec<A>) -> B>,
 }
 
-impl<A: Bound, B> Debug for MBinder<A, B>
+impl<A, B> Debug for MBinder<A, B>
 where
-    A: Debug + Clone + 'static,
+    A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Debug + Clone + 'static,
     B: Debug + Clone + 'static,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -515,9 +501,9 @@ where
     }
 }
 
-impl<A: Bound, B> MBinder<A, B>
+impl<A, B> MBinder<A, B>
 where
-    A: Clone + 'static,
+    A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
     B: Clone + 'static,
 {
     #[inline(always)]
@@ -564,7 +550,7 @@ where
 
     pub fn unbind(&self) -> (Vec<Var<A>>, B)
     where
-        A: Clone + 'static,
+        A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
         B: Clone + 'static,
     {
         let mut xs = vec![];
@@ -855,15 +841,15 @@ where
     fn into_box(self) -> Boxed<A>;
 }
 
-impl<A: Bound + Clone + 'static> IntoBoxed<A> for Var<A> {
+impl<A: Clone + 'static> IntoBoxed<A> for Var<A> {
     fn into_box(self) -> Boxed<A> {
         self.inner.boxed.clone()
     }
 }
 
-impl<A: Bound, B> IntoBoxed<Binder<A, B>> for Binder<A, Boxed<B>>
+impl<A, B> IntoBoxed<Binder<A, B>> for Binder<A, Boxed<B>>
 where
-    A: Clone + 'static,
+    A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
     B: Clone + 'static,
 {
     fn into_box(self) -> Boxed<Binder<A, B>> {
@@ -872,9 +858,9 @@ where
     }
 }
 
-impl<A: Bound, B> IntoBoxed<MBinder<A, B>> for MBinder<A, Boxed<B>>
+impl<A, B> IntoBoxed<MBinder<A, B>> for MBinder<A, Boxed<B>>
 where
-    A: Clone + 'static,
+    A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
     B: Clone + 'static,
 {
     fn into_box(self) -> Boxed<MBinder<A, B>> {

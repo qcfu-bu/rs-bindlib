@@ -1,5 +1,5 @@
 use rs_bindlib::*;
-use std::rc::Rc;
+use std::{any::Any, rc::Rc};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Op1 {
@@ -23,7 +23,21 @@ pub enum Op2 {
     Or,
 }
 
-pub type Term = Rc<TermNode>;
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+pub struct Term(pub Rc<TermNode>);
+
+impl Into<Rc<dyn Any>> for Term {
+    fn into(self) -> Rc<dyn Any> {
+        self.0
+    }
+}
+
+impl From<Rc<dyn Any>> for Term {
+    fn from(r: Rc<dyn Any>) -> Self {
+        Term(r.downcast::<TermNode>().unwrap())
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -40,15 +54,15 @@ pub enum TermNode {
 }
 
 pub fn new_var(name: String) -> Var<Term> {
-    Var::new(|x| Rc::new(TermNode::Var(x)), name)
+    Var::new(|x| Term(Rc::new(TermNode::Var(x))), name)
 }
 
 pub fn int(i: i32) -> Boxed<Term> {
-    boxed(Rc::new(TermNode::Int(i)))
+    boxed(Term(Rc::new(TermNode::Int(i))))
 }
 
 pub fn bool(b: bool) -> Boxed<Term> {
-    boxed(Rc::new(TermNode::Bool(b)))
+    boxed(Term(Rc::new(TermNode::Bool(b))))
 }
 
 pub fn var(x: Var<Term>) -> Boxed<Term> {
@@ -56,28 +70,28 @@ pub fn var(x: Var<Term>) -> Boxed<Term> {
 }
 
 pub fn op1(op: Op1, m: Boxed<Term>) -> Boxed<Term> {
-    apply1(move |m| Rc::new(TermNode::Op1(op, m)), m)
+    apply1(move |m| Term(Rc::new(TermNode::Op1(op, m))), m)
 }
 
 pub fn op2(op: Op2, m: Boxed<Term>, n: Boxed<Term>) -> Boxed<Term> {
-    apply2(move |m, n| Rc::new(TermNode::Op2(op, m, n)), m, n)
+    apply2(move |m, n| Term(Rc::new(TermNode::Op2(op, m, n))), m, n)
 }
 
 pub fn fun(bnd: Boxed<MBinder<Term, Term>>) -> Boxed<Term> {
-    apply1(move |bnd| Rc::new(TermNode::Fun(bnd)), bnd)
+    apply1(move |bnd| Term(Rc::new(TermNode::Fun(bnd))), bnd)
 }
 
 pub fn app(m: Boxed<Term>, n: Boxed<Term>) -> Boxed<Term> {
-    apply2(move |m, n| Rc::new(TermNode::App(m, n)), m, n)
+    apply2(move |m, n| Term(Rc::new(TermNode::App(m, n))), m, n)
 }
 
 pub fn letin(m: Boxed<Term>, n: Boxed<Binder<Term, Term>>) -> Boxed<Term> {
-    apply2(move |m, n| Rc::new(TermNode::LetIn(m, n)), m, n)
+    apply2(move |m, n| Term(Rc::new(TermNode::LetIn(m, n))), m, n)
 }
 
 pub fn ifte(m: Boxed<Term>, n1: Boxed<Term>, n2: Boxed<Term>) -> Boxed<Term> {
     apply3(
-        move |m, n1, n2| Rc::new(TermNode::Ifte(m, n1, n2)),
+        move |m, n1, n2| Term(Rc::new(TermNode::Ifte(m, n1, n2))),
         m,
         n1,
         n2,
@@ -90,15 +104,15 @@ impl IntoBoxed<Term> for &TermNode {
             TermNode::Int(i) => int(*i),
             TermNode::Bool(i) => bool(*i),
             TermNode::Var(x) => x.clone().into_box(),
-            TermNode::Op1(op, m) => op1(*op, m.into_box()),
-            TermNode::Op2(op, m, n) => op2(*op, m.into_box(), n.into_box()),
-            TermNode::Fun(bnd) => fun(bnd.clone().compose(|m| m.into_box()).into_box()),
-            TermNode::App(m, n) => app(m.into_box(), n.into_box()),
+            TermNode::Op1(op, m) => op1(*op, m.0.into_box()),
+            TermNode::Op2(op, m, n) => op2(*op, m.0.into_box(), n.0.into_box()),
+            TermNode::Fun(bnd) => fun(bnd.clone().compose(|m| m.0.into_box()).into_box()),
+            TermNode::App(m, n) => app(m.0.into_box(), n.0.into_box()),
             TermNode::LetIn(m, bnd) => letin(
-                m.into_box(),
-                bnd.clone().compose(|m| m.into_box()).into_box(),
+                m.0.into_box(),
+                bnd.clone().compose(|m| m.0.into_box()).into_box(),
             ),
-            TermNode::Ifte(m, n1, n2) => ifte(m.into_box(), n1.into_box(), n2.into_box()),
+            TermNode::Ifte(m, n1, n2) => ifte(m.0.into_box(), n1.0.into_box(), n2.0.into_box()),
         }
     }
 }
