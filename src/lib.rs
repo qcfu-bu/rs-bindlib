@@ -404,7 +404,6 @@ where
     #[inline(always)]
     fn bind_var_aux2(rank: usize, t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(A) -> B> {
         Rc::new(move |arg| {
-            let env = env.clone(); // NOTE: We have to make a clone here to avoid Rc cycles.
             env.set(rank, arg);
             t(&pos, &env)
         })
@@ -619,7 +618,6 @@ where
         Rc::new(move |args| {
             assert_eq!(args.len(), arity);
             let mut cur_pos = rank;
-            let env = env.clone(); // NOTE: We have to make a clone here to avoid Rc cycles.
             for i in 0..arity {
                 if binds[i] {
                     env.set(cur_pos, args[i].clone());
