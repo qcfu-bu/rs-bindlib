@@ -5,7 +5,6 @@ use std::{
     cell::RefCell,
     cmp,
     fmt::Debug,
-    mem,
     rc::{Rc, Weak},
     sync::atomic::{AtomicUsize, Ordering::Relaxed},
 };
@@ -140,7 +139,7 @@ impl<A: From<Rc<dyn Any>> + 'static> Var<A> {
     }
 
     fn build(key: usize, mk_free: Rc<dyn Fn(Var<A>) -> A>, name: String) -> Self {
-        let x = Rc::new_cyclic(|wk| {
+        let x = Rc::new_cyclic(|wk: &Weak<VarInner<A>>| {
             let clo = Closure::new(move |vp, env| {
                 let i = *vp.borrow().get(&key).unwrap();
                 env.get::<A>(i)
@@ -160,7 +159,7 @@ impl<A: From<Rc<dyn Any>> + 'static> Var<A> {
 #[derive(Clone)]
 struct AnyVar {
     key: usize,
-    inner: Weak<VarInner<()>>,
+    inner: Weak<dyn Any>,
 }
 
 impl PartialEq for AnyVar {
@@ -184,18 +183,15 @@ impl Ord for AnyVar {
 }
 
 impl AnyVar {
-    fn from_weak<A>(key: usize, wk: Weak<VarInner<A>>) -> Self {
-        AnyVar {
-            key,
-            inner: unsafe { mem::transmute(wk) },
-        }
+    fn from_weak(key: usize, wk: Weak<dyn Any>) -> Self {
+        AnyVar { key, inner: wk }
     }
 
-    fn to_var<A>(&self) -> Var<A> {
-        let inner: Weak<VarInner<A>> = unsafe { mem::transmute(self.inner.clone()) };
+    fn to_var<A: 'static>(&self) -> Var<A> {
+        let inner: Weak<dyn Any> = self.inner.clone();
         Var {
             key: self.key,
-            inner: inner.upgrade().unwrap(),
+            inner: inner.upgrade().unwrap().downcast().unwrap(),
         }
     }
 }
