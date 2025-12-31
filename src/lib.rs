@@ -208,14 +208,12 @@ enum BoxedInner<A> {
 }
 
 impl<A: 'static> Boxed<A> {
-    #[inline(always)]
     fn mk_box(value: A) -> Self {
         Boxed {
             inner: BoxedInner::Box(value),
         }
     }
 
-    #[inline(always)]
     fn mk_env(vs: Vec<AnyVar>, n: usize, t: Closure<A>) -> Self {
         Boxed {
             inner: BoxedInner::Env(vs, n, t),
@@ -268,14 +266,12 @@ fn remove<A>(x: &Var<A>, xs: &Vec<AnyVar>) -> Option<Vec<AnyVar>> {
     return Some(acc);
 }
 
-#[inline(always)]
 fn minimize_aux_prefix(size: usize, n: usize, env: &Env) -> Env {
     let mut new_env = Env::new(size + n);
     env.copy_to(&mut new_env, size);
     new_env
 }
 
-#[inline(always)]
 fn minimize_aux(tab: Vec<usize>, n: usize, env: &Env) -> Env {
     let size = tab.len();
     let new_env = Env::new(size + n);
@@ -340,27 +336,22 @@ where
     A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
     B: Clone + 'static,
 {
-    #[inline(always)]
     pub fn name(&self) -> String {
         self.var.name.clone()
     }
 
-    #[inline(always)]
     pub fn subst(&self, x: A) -> B {
         (self.value)(x)
     }
 
-    #[inline(always)]
     pub fn occur(&self) -> bool {
         self.bind
     }
 
-    #[inline(always)]
     pub fn rank(&self) -> usize {
         self.rank
     }
 
-    #[inline(always)]
     pub fn is_closed(&self) -> bool {
         self.rank == 0
     }
@@ -389,7 +380,6 @@ where
         return (x, m);
     }
 
-    #[inline(always)]
     fn bind_var_aux1(t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(A) -> B> {
         Rc::new(move |arg| {
             env.set(0, arg);
@@ -397,7 +387,6 @@ where
         })
     }
 
-    #[inline(always)]
     fn bind_var_aux2(rank: usize, t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(A) -> B> {
         Rc::new(move |arg| {
             env.set(rank, arg);
@@ -405,7 +394,6 @@ where
         })
     }
 
-    #[inline(always)]
     fn bind_var_aux3(x: Var<A>, rank: usize, t: Clo<B>, pos: Pos, env: Env) -> Binder<A, B> {
         let value = Self::bind_var_aux2(rank, t, pos, env);
         Binder {
@@ -416,12 +404,10 @@ where
         }
     }
 
-    #[inline(always)]
     fn bind_var_aux4(t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(A) -> B> {
         Rc::new(move |_| t(&pos, &env))
     }
 
-    #[inline(always)]
     fn bind_var_aux5(x: Var<A>, rank: usize, t: Clo<B>, pos: Pos, env: Env) -> Binder<A, B> {
         let value = Self::bind_var_aux4(t, pos, env);
         Binder {
@@ -501,32 +487,26 @@ where
     A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
     B: Clone + 'static,
 {
-    #[inline(always)]
     pub fn arity(&self) -> usize {
         self.vars.len()
     }
 
-    #[inline(always)]
     pub fn names(&self) -> Vec<String> {
         self.vars.iter().map(|v| v.name.clone()).collect()
     }
 
-    #[inline(always)]
     pub fn subst(&self, x: Vec<A>) -> B {
         (self.value)(x)
     }
 
-    #[inline(always)]
     pub fn occurs(&self) -> Vec<bool> {
         self.binds.clone()
     }
 
-    #[inline(always)]
     pub fn rank(&self) -> usize {
         self.rank
     }
 
-    #[inline(always)]
     pub fn is_closed(&self) -> bool {
         self.rank == 0
     }
@@ -560,7 +540,6 @@ where
         return (xs, m);
     }
 
-    #[inline(always)]
     fn bind_mvar_aux1(binds: Vec<bool>, t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(Vec<A>) -> B> {
         let arity = binds.len();
         Rc::new(move |args| {
@@ -576,7 +555,6 @@ where
         })
     }
 
-    #[inline(always)]
     fn bind_mvar_aux2(arity: usize, t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(Vec<A>) -> B> {
         Rc::new(move |args| {
             assert_eq!(args.len(), arity);
@@ -584,7 +562,6 @@ where
         })
     }
 
-    #[inline(always)]
     fn bind_mvar_aux3(
         t: Clo<B>,
         vars: Vec<Rc<VarInner<A>>>,
@@ -602,7 +579,6 @@ where
         }
     }
 
-    #[inline(always)]
     fn bind_mvar_aux4(
         t: Clo<B>,
         rank: usize,
@@ -624,7 +600,6 @@ where
         })
     }
 
-    #[inline(always)]
     fn bind_mvar_aux5(
         t: Clo<B>,
         vars: Vec<Rc<VarInner<A>>>,
@@ -734,7 +709,6 @@ where
     }
 }
 
-#[inline(always)]
 fn boxed_apply<A, B, F>(f: Boxed<F>, a: Boxed<A>) -> Boxed<B>
 where
     A: Clone + 'static,
