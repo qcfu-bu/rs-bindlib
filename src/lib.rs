@@ -34,54 +34,64 @@ impl Env {
     }
 
     fn copy_to(&self, dst: &mut Env, len: usize) {
-        for i in 0..len {
-            dst.tab.borrow_mut()[i] = self.tab.borrow()[i].clone();
+        let src_tab = self.tab.borrow();
+        let mut dst_tab = dst.tab.borrow_mut();
+        dst_tab[0..len].clone_from_slice(&src_tab[0..len]);
+    }
+}
+
+#[derive(Clone)]
+struct Pos {
+    inner: Rc<RefCell<HashMap<usize, usize>>>,
+}
+
+impl Pos {
+    fn new() -> Self {
+        Self {
+            inner: Rc::new(RefCell::new(HashMap::default())),
         }
     }
 }
 
-type Pos = Rc<RefCell<HashMap<usize, usize>>>;
-type Clo<A> = Rc<dyn Fn(&Pos, &Env) -> A>;
-
 #[derive(Clone)]
-struct Closure<A> {
-    inner: Clo<A>,
+struct Clo<T> {
+    inner: Rc<dyn Fn(&Pos, &Env) -> T>,
 }
 
-impl<A> Closure<A> {
+impl<T> Clo<T> {
     fn new<F>(f: F) -> Self
     where
-        F: Fn(&Pos, &Env) -> A + 'static,
+        F: Fn(&Pos, &Env) -> T + 'static,
     {
         Self { inner: Rc::new(f) }
     }
 
-    fn map<B, F>(self, f: F) -> Closure<B>
+    fn map<B, F>(self, f: F) -> Clo<B>
     where
-        A: Clone + 'static,
+        T: Clone + 'static,
         B: Clone + 'static,
-        F: Fn(A) -> B + 'static,
+        F: Fn(T) -> B + 'static,
     {
-        Closure::new(move |vs, env| f((self.inner)(vs, env)))
+        Clo::new(move |vs, env| f((self.inner)(vs, env)))
     }
 
-    fn app<B, F>(clo: Closure<F>, a: A) -> Closure<B>
+    fn app<A, B>(self: Self, a: A) -> Clo<B>
     where
         A: Clone + 'static,
         B: Clone + 'static,
-        F: Fn(A) -> B + 'static,
+        T: Fn(A) -> B + 'static,
     {
-        Closure::new(move |vs, env| (clo.inner)(vs, env)(a.clone()))
+        Clo::new(move |vs, env| (self.inner)(vs, env)(a.clone()))
     }
 
-    fn compose<B, F>(clo: Closure<F>, cla: Closure<A>) -> Closure<B>
+    fn compose<A, B>(self, cla: Clo<A>) -> Clo<B>
     where
         A: Clone + 'static,
         B: Clone + 'static,
-        F: Fn(A) -> B + 'static,
+        T: Fn(A) -> B + 'static,
     {
-        Closure::new(move |vs, env| {
-            let f = (clo.inner)(vs, env);
+        Clo::new(move |vs, env| {
+            let f = (self.inner)(vs, env);
             let a = (cla.inner)(vs, env);
             f(a)
         })
@@ -140,11 +150,11 @@ impl<A: From<Rc<dyn Any>> + 'static> Var<A> {
 
     fn build(key: usize, mk_free: Rc<dyn Fn(Var<A>) -> A>, name: String) -> Self {
         let x = Rc::new_cyclic(|wk: &Weak<VarInner<A>>| {
-            let clo = Closure::new(move |vp, env| {
-                let i = *vp.borrow().get(&key).unwrap();
+            let clo = Clo::new(move |vp, env| {
+                let i = vp.inner.borrow()[&key];
                 env.get::<A>(i)
             });
-            let wk = AnyVar::from_weak(key, wk.clone());
+            let wk = AnyVar::from(key, wk.clone());
             let boxed = Boxed::mk_env(vec![wk], 0, clo);
             VarInner {
                 name,
@@ -183,15 +193,15 @@ impl Ord for AnyVar {
 }
 
 impl AnyVar {
-    fn from_weak(key: usize, wk: Weak<dyn Any>) -> Self {
+    fn from(key: usize, wk: Weak<dyn Any>) -> Self {
         AnyVar { key, inner: wk }
     }
 
-    fn to_var<A: 'static>(&self) -> Var<A> {
-        let inner: Weak<dyn Any> = self.inner.clone();
+    fn downcast<A: 'static>(&self) -> Var<A> {
+        let wk: Weak<dyn Any> = self.inner.clone();
         Var {
             key: self.key,
-            inner: inner.upgrade().unwrap().downcast().unwrap(),
+            inner: wk.upgrade().unwrap().downcast().unwrap(),
         }
     }
 }
@@ -204,7 +214,7 @@ pub struct Boxed<A> {
 #[derive(Clone)]
 enum BoxedInner<A> {
     Box(A),
-    Env(Vec<AnyVar>, usize, Closure<A>),
+    Env(Vec<AnyVar>, usize, Clo<A>),
 }
 
 impl<A: 'static> Boxed<A> {
@@ -214,7 +224,7 @@ impl<A: 'static> Boxed<A> {
         }
     }
 
-    fn mk_env(vs: Vec<AnyVar>, n: usize, t: Closure<A>) -> Self {
+    fn mk_env(vs: Vec<AnyVar>, n: usize, t: Clo<A>) -> Self {
         Boxed {
             inner: BoxedInner::Env(vs, n, t),
         }
@@ -230,12 +240,12 @@ impl<A: 'static> Boxed<A> {
                 let nbvs = vs.len();
                 let env = Env::new(nbvs + nb);
                 let mut cur = 0;
-                let pos = Rc::new(RefCell::new(HashMap::default()));
+                let pos = Pos::new();
                 for wk in vs {
-                    let x = wk.to_var::<A>();
+                    let x = wk.downcast::<A>();
                     let v = (x.inner.mk_free)(x.clone());
                     env.set(cur, v);
-                    pos.borrow_mut().insert(x.key, cur);
+                    pos.inner.borrow_mut().insert(x.key, cur);
                     cur += 1;
                 }
                 (t.inner)(&pos, &env)
@@ -282,22 +292,22 @@ fn minimize_aux(tab: Vec<usize>, n: usize, env: &Env) -> Env {
     new_env
 }
 
-fn minimize<A: 'static>(xs: Vec<AnyVar>, n: usize, t: Closure<A>) -> Closure<A> {
+fn minimize<A: 'static>(xs: Vec<AnyVar>, n: usize, t: Clo<A>) -> Clo<A> {
     if n == 0 {
         return t;
     }
-    Closure::new(move |vp, env| {
+    Clo::new(move |vp, env| {
         let size = xs.len();
         let mut tab: Vec<usize> = vec![0; size];
         let mut prefix = true;
-        let vp1 = Rc::new(RefCell::new(HashMap::default()));
+        let vp1 = Pos::new();
         for (i, wk) in xs.iter().enumerate() {
-            let j = *vp.borrow().get(&wk.key).unwrap();
+            let j = vp.inner.borrow()[&wk.key];
             if i != j {
                 prefix = false;
             }
             tab[i] = j;
-            vp1.borrow_mut().insert(wk.key, i);
+            vp1.inner.borrow_mut().insert(wk.key, i);
         }
         let f = t.inner.clone();
         let env = if prefix {
@@ -383,14 +393,14 @@ where
     fn bind_var_aux1(t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(A) -> B> {
         Rc::new(move |arg| {
             env.set(0, arg);
-            t(&pos, &env)
+            (t.inner)(&pos, &env)
         })
     }
 
     fn bind_var_aux2(rank: usize, t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(A) -> B> {
         Rc::new(move |arg| {
             env.set(rank, arg);
-            t(&pos, &env)
+            (t.inner)(&pos, &env)
         })
     }
 
@@ -405,7 +415,7 @@ where
     }
 
     fn bind_var_aux4(t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(A) -> B> {
-        Rc::new(move |_| t(&pos, &env))
+        Rc::new(move |_| (t.inner)(&pos, &env))
     }
 
     fn bind_var_aux5(x: Var<A>, rank: usize, t: Clo<B>, pos: Pos, env: Env) -> Binder<A, B> {
@@ -428,9 +438,9 @@ where
             }),
             BoxedInner::Env(xs, n, t) => {
                 if xs.len() == 1 && x.key == xs[0].key {
-                    let vp = Rc::new(RefCell::new(HashMap::default()));
-                    vp.borrow_mut().insert(x.key, 0);
-                    let value = Self::bind_var_aux1(t.inner, vp, Env::new(n + 1));
+                    let vp = Pos::new();
+                    vp.inner.borrow_mut().insert(x.key, 0);
+                    let value = Self::bind_var_aux1(t, vp, Env::new(n + 1));
                     return Boxed::mk_box(Binder {
                         var: x.inner,
                         rank: 0,
@@ -440,18 +450,18 @@ where
                 } else if let Some(xs) = remove(&x, &xs) {
                     let key = x.key;
                     let rank = xs.len();
-                    let clo = Closure::new(move |vp, env| {
+                    let clo = Clo::new(move |vp, env| {
                         let x = x.clone();
-                        let f = t.inner.clone();
-                        vp.borrow_mut().insert(key, rank);
+                        let f = t.clone();
+                        vp.inner.borrow_mut().insert(key, rank);
                         Self::bind_var_aux3(x, rank, f, vp.clone(), env.clone())
                     });
                     return Boxed::mk_env(xs, n + 1, clo);
                 };
                 let rank = xs.len();
-                let clo = Closure::new(move |vp, env| {
+                let clo = Clo::new(move |vp, env| {
                     let x = x.clone();
-                    let f = t.inner.clone();
+                    let f = t.clone();
                     Self::bind_var_aux5(x, rank, f, vp.clone(), env.clone())
                 });
                 Boxed::mk_env(xs, n, clo)
@@ -551,14 +561,14 @@ where
                     n += 1;
                 }
             }
-            t(&pos, &env)
+            (t.inner)(&pos, &env)
         })
     }
 
     fn bind_mvar_aux2(arity: usize, t: Clo<B>, pos: Pos, env: Env) -> Rc<dyn Fn(Vec<A>) -> B> {
         Rc::new(move |args| {
             assert_eq!(args.len(), arity);
-            t(&pos, &env)
+            (t.inner)(&pos, &env)
         })
     }
 
@@ -596,7 +606,7 @@ where
                     cur_pos += 1;
                 }
             }
-            t(&pos, &env)
+            (t.inner)(&pos, &env)
         })
     }
 
@@ -652,18 +662,18 @@ where
                     let mut vars = vec![];
                     let mut binds = vec![];
                     let mut cur_pos = 0;
-                    let vp = Rc::new(RefCell::new(HashMap::default()));
+                    let vp = Pos::new();
                     for (i, key) in keys.iter().enumerate() {
                         vars.push(xs[i].inner.clone());
                         if let Some(k) = key {
-                            vp.borrow_mut().insert(*k, cur_pos);
+                            vp.inner.borrow_mut().insert(*k, cur_pos);
                             binds.push(true);
                             cur_pos += 1;
                         } else {
                             binds.push(false);
                         }
                     }
-                    let value = Self::bind_mvar_aux1(binds.clone(), t.inner, vp, Env::new(m));
+                    let value = Self::bind_mvar_aux1(binds.clone(), t, vp, Env::new(m));
                     Boxed::mk_box(MBinder {
                         vars,
                         binds,
@@ -672,35 +682,40 @@ where
                     })
                 } else if m == n {
                     let rank = vs.len();
-                    let clo = Closure::new(move |vp, env| {
-                        let f = t.inner.clone();
+                    let clo = Clo::new(move |vp, env| {
                         let mut vars = vec![];
                         let mut binds = vec![];
                         for x in xs.iter() {
                             vars.push(x.inner.clone());
                             binds.push(false);
                         }
-                        Self::bind_mvar_aux3(f, vars, rank, binds, vp.clone(), env.clone())
+                        Self::bind_mvar_aux3(t.clone(), vars, rank, binds, vp.clone(), env.clone())
                     });
                     Boxed::mk_env(vs, m, clo)
                 } else {
                     let rank = vs.len();
-                    let clo = Closure::new(move |vp, env| {
-                        let f = t.inner.clone();
+                    let clo = Clo::new(move |vp, env| {
                         let mut vars = vec![];
                         let mut binds = vec![];
                         let mut cur_pos = rank;
                         for (i, key) in keys.iter().enumerate() {
                             vars.push(xs[i].inner.clone());
                             if let Some(k) = key {
-                                vp.borrow_mut().insert(*k, cur_pos);
+                                vp.inner.borrow_mut().insert(*k, cur_pos);
                                 binds.push(true);
                                 cur_pos += 1;
                             } else {
                                 binds.push(false);
                             }
                         }
-                        MBinder::bind_mvar_aux5(f, vars, rank, binds, vp.clone(), env.clone())
+                        MBinder::bind_mvar_aux5(
+                            t.clone(),
+                            vars,
+                            rank,
+                            binds,
+                            vp.clone(),
+                            env.clone(),
+                        )
                     });
                     Boxed::mk_env(vs, m, clo)
                 }
@@ -718,14 +733,12 @@ where
     match (f.inner, a.inner) {
         (BoxedInner::Box(f), BoxedInner::Box(a)) => Boxed::mk_box(f(a)),
         (BoxedInner::Box(f), BoxedInner::Env(va, na, ta)) => Boxed::mk_env(va, na, ta.map(f)),
-        (BoxedInner::Env(vf, nf, tf), BoxedInner::Box(a)) => {
-            Boxed::mk_env(vf, nf, Closure::app(tf, a))
-        }
+        (BoxedInner::Env(vf, nf, tf), BoxedInner::Box(a)) => Boxed::mk_env(vf, nf, tf.app(a)),
         (BoxedInner::Env(vf, nf, tf), BoxedInner::Env(va, na, ta)) => {
             let vs = merge_unique(&vf, &va);
             let clof = minimize(vf, nf, tf);
             let cloa = minimize(va, na, ta);
-            Boxed::mk_env(vs, 0, Closure::compose(clof, cloa))
+            Boxed::mk_env(vs, 0, Clo::compose(clof, cloa))
         }
     }
 }
@@ -842,7 +855,7 @@ where
                 }
                 BoxedInner::Env(vs, n, t) => {
                     let f = t.inner.clone();
-                    let clo = Closure::new(move |vp, env| Some(f(vp, &env)));
+                    let clo = Clo::new(move |vp, env| Some(f(vp, &env)));
                     return Boxed::mk_env(vs, n, clo);
                 }
             }
@@ -865,7 +878,7 @@ where
         for a in val.into_iter() {
             match a.inner {
                 BoxedInner::Box(t) => {
-                    clos.push(Closure::new(move |_, _| t.clone()));
+                    clos.push(Clo::new(move |_, _| t.clone()));
                 }
                 BoxedInner::Env(vs, na, ta) => {
                     b = false;
@@ -877,10 +890,10 @@ where
         }
         let f = move |vp: &Pos, env: &Env| clos.iter().map(|c| (c.inner)(vp, env)).collect();
         if b {
-            let vp = Rc::new(RefCell::new(HashMap::default()));
+            let vp = Pos::new();
             Boxed::mk_box(f(&vp, &Env::new(0)))
         } else {
-            let clo = Closure::new(f);
+            let clo = Clo::new(f);
             Boxed::mk_env(vars.clone(), n, minimize(vars, n, clo))
         }
     }
