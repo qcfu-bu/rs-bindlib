@@ -36,7 +36,7 @@ impl Env {
     fn copy_to(&self, dst: &mut Env, len: usize) {
         let src_tab = self.tab.borrow();
         let mut dst_tab = dst.tab.borrow_mut();
-        dst_tab[0..len].clone_from_slice(&src_tab[0..len]);
+        dst_tab[..len].clone_from_slice(&src_tab[..len]);
     }
 }
 
