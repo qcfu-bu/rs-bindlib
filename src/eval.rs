@@ -1,40 +1,40 @@
 use crate::ast1::*;
 use std::rc::Rc;
 
-pub fn eval(m0: Term) -> Term {
+pub fn eval(m0: &Term) -> Term {
     use TermNode::*;
     match &*m0.0 {
         Int(_) | Bool(_) | Var(_) => m0.clone(),
-        Fun(_) => m0,
+        Fun(_) => m0.clone(),
         Op1(op1, m) => {
-            let m = eval(m.clone());
-            eval_op1(op1, m)
+            let m = eval(m);
+            eval_op1(op1, &m)
         }
         Op2(op2, m, n) => {
-            let m = eval(m.clone());
-            let n = eval(n.clone());
-            eval_op2(op2, m, n)
+            let m = eval(m);
+            let n = eval(n);
+            eval_op2(op2, &m, &n)
         }
         App(m, n) => {
-            let m0 = eval(m.clone());
-            let n0 = eval(n.clone());
+            let m0 = eval(m);
+            let n0 = eval(n);
             if let Fun(bnd) = &*m0.0 {
                 let expr = bnd.subst(vec![m0.clone(), n0]);
-                return eval(expr);
+                return eval(&expr);
             }
             panic!("eval_App({:?})", m0);
         }
         LetIn(m, bnd) => {
-            let m = eval(m.clone());
-            eval(bnd.subst(m))
+            let m = eval(m);
+            eval(&bnd.subst(m))
         }
         Ifte(m, n1, n2) => {
-            let m = eval(m.clone());
+            let m = eval(m);
             if let Bool(b) = &*m.0 {
                 if *b {
-                    return eval(n1.clone());
+                    return eval(n1);
                 } else {
-                    return eval(n2.clone());
+                    return eval(n2);
                 }
             }
             panic!("eval_Ifte({:?})", m0);
@@ -42,7 +42,7 @@ pub fn eval(m0: Term) -> Term {
     }
 }
 
-fn eval_op1(op: &Op1, m: Term) -> Term {
+fn eval_op1(op: &Op1, m: &Term) -> Term {
     use self::Op1::*;
     use TermNode::*;
     match (op, &*m.0) {
@@ -52,7 +52,7 @@ fn eval_op1(op: &Op1, m: Term) -> Term {
     }
 }
 
-fn eval_op2(op: &Op2, m: Term, n: Term) -> Term {
+fn eval_op2(op: &Op2, m: &Term, n: &Term) -> Term {
     use self::Op2::*;
     use TermNode::*;
     match (op, &*m.0, &*n.0) {

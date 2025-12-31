@@ -21,7 +21,7 @@ fn main() {
             let tm = parse_term(pairs.next().unwrap().into_inner());
             let tm = trans01::trans(&mut HashMap::default(), tm.as_ref()).unbox();
             println!("result : {:#?}", tm);
-            let val = eval::eval(tm);
+            let val = eval::eval(&tm);
             println!("result : {:#?}", val);
         }
         Err(e) => {
