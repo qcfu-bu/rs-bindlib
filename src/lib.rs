@@ -33,9 +33,9 @@ impl Env {
         A::from(any)
     }
 
-    fn copy_to(&self, dst: &mut Env, len: usize) {
-        let src_tab = self.tab.borrow();
-        let mut dst_tab = dst.tab.borrow_mut();
+    fn clone_from(&self, src: &Env, len: usize) {
+        let mut dst_tab = self.tab.borrow_mut();
+        let src_tab = src.tab.borrow();
         dst_tab[..len].clone_from_slice(&src_tab[..len]);
     }
 }
@@ -277,8 +277,8 @@ fn remove<A>(x: &Var<A>, xs: &Vec<AnyVar>) -> Option<Vec<AnyVar>> {
 }
 
 fn minimize_aux_prefix(size: usize, n: usize, env: &Env) -> Env {
-    let mut new_env = Env::new(size + n);
-    env.copy_to(&mut new_env, size);
+    let new_env = Env::new(size + n);
+    new_env.clone_from(env, size);
     new_env
 }
 
