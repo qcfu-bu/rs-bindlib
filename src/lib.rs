@@ -309,13 +309,12 @@ fn minimize<A: 'static>(xs: Vec<AnyVar>, n: usize, t: Clo<A>) -> Clo<A> {
             tab[i] = j;
             vp1.inner.borrow_mut().insert(wk.key, i);
         }
-        let f = t.inner.clone();
         let env = if prefix {
             minimize_aux_prefix(size, n, &env)
         } else {
             minimize_aux(tab, n, &env)
         };
-        f(&vp1, &env)
+        (t.inner)(&vp1, &env)
     })
 }
 
@@ -451,18 +450,14 @@ where
                     let key = x.key;
                     let rank = xs.len();
                     let clo = Clo::new(move |vp, env| {
-                        let x = x.clone();
-                        let f = t.clone();
                         vp.inner.borrow_mut().insert(key, rank);
-                        Self::bind_var_aux3(x, rank, f, vp.clone(), env.clone())
+                        Self::bind_var_aux3(x.clone(), rank, t.clone(), vp.clone(), env.clone())
                     });
                     return Boxed::mk_env(xs, n + 1, clo);
                 };
                 let rank = xs.len();
                 let clo = Clo::new(move |vp, env| {
-                    let x = x.clone();
-                    let f = t.clone();
-                    Self::bind_var_aux5(x, rank, f, vp.clone(), env.clone())
+                    Self::bind_var_aux5(x.clone(), rank, t.clone(), vp.clone(), env.clone())
                 });
                 Boxed::mk_env(xs, n, clo)
             }
@@ -851,11 +846,10 @@ where
         if let Some(a) = opt {
             match a.inner {
                 BoxedInner::Box(t) => {
-                    return boxed(Some(t.clone()));
+                    return boxed(Some(t));
                 }
                 BoxedInner::Env(vs, n, t) => {
-                    let f = t.inner.clone();
-                    let clo = Clo::new(move |vp, env| Some(f(vp, &env)));
+                    let clo = Clo::new(move |vp, env| Some((t.inner)(vp, env)));
                     return Boxed::mk_env(vs, n, clo);
                 }
             }
