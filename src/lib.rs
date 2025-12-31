@@ -843,18 +843,35 @@ where
     A: Clone + 'static,
 {
     fn from(opt: Option<Boxed<A>>) -> Boxed<Option<A>> {
-        if let Some(a) = opt {
-            match a.inner {
-                BoxedInner::Box(t) => {
-                    return boxed(Some(t));
-                }
+        match opt {
+            Some(a) => match a.inner {
+                BoxedInner::Box(t) => boxed(Some(t)),
                 BoxedInner::Env(vs, n, t) => {
                     let clo = Clo::new(move |vp, env| Some((t.inner)(vp, env)));
-                    return Boxed::mk_env(vs, n, clo);
+                    Boxed::mk_env(vs, n, clo)
                 }
-            }
+            },
+            None => boxed(None),
         }
-        return boxed(None);
+    }
+}
+
+impl<A, E> From<Result<Boxed<A>, E>> for Boxed<Result<A, E>>
+where
+    A: Clone + 'static,
+    E: Clone + 'static,
+{
+    fn from(opt: Result<Boxed<A>, E>) -> Boxed<Result<A, E>> {
+        match opt {
+            Ok(a) => match a.inner {
+                BoxedInner::Box(t) => boxed(Ok(t)),
+                BoxedInner::Env(vs, n, t) => {
+                    let clo = Clo::new(move |vp, env| Ok((t.inner)(vp, env)));
+                    Boxed::mk_env(vs, n, clo)
+                }
+            },
+            Err(e) => boxed(Err(e)),
+        }
     }
 }
 
