@@ -66,7 +66,7 @@ pub fn bool(b: bool) -> Boxed<Term> {
 }
 
 pub fn var(x: Var<Term>) -> Boxed<Term> {
-    x.into_box()
+    x.into()
 }
 
 pub fn op1(op: Op1, m: Boxed<Term>) -> Boxed<Term> {
@@ -98,21 +98,18 @@ pub fn ifte(m: Boxed<Term>, n1: Boxed<Term>, n2: Boxed<Term>) -> Boxed<Term> {
     )
 }
 
-impl IntoBoxed<Term> for &TermNode {
-    fn into_box(self) -> Boxed<Term> {
-        match self {
+impl Into<Boxed<Term>> for &Term {
+    fn into(self) -> Boxed<Term> {
+        match &*self.0 {
             TermNode::Int(i) => int(*i),
             TermNode::Bool(i) => bool(*i),
-            TermNode::Var(x) => x.clone().into_box(),
-            TermNode::Op1(op, m) => op1(*op, m.0.into_box()),
-            TermNode::Op2(op, m, n) => op2(*op, m.0.into_box(), n.0.into_box()),
-            TermNode::Fun(bnd) => fun(bnd.clone().compose(|m| m.0.into_box()).into_box()),
-            TermNode::App(m, n) => app(m.0.into_box(), n.0.into_box()),
-            TermNode::LetIn(m, bnd) => letin(
-                m.0.into_box(),
-                bnd.clone().compose(|m| m.0.into_box()).into_box(),
-            ),
-            TermNode::Ifte(m, n1, n2) => ifte(m.0.into_box(), n1.0.into_box(), n2.0.into_box()),
+            TermNode::Var(x) => x.clone().into(),
+            TermNode::Op1(op, m) => op1(*op, m.into()),
+            TermNode::Op2(op, m, n) => op2(*op, m.into(), n.into()),
+            TermNode::Fun(bnd) => fun(bnd.clone().compose(|m| (&m).into()).into()),
+            TermNode::App(m, n) => app(m.into(), n.into()),
+            TermNode::LetIn(m, bnd) => letin(m.into(), bnd.clone().compose(|m| (&m).into()).into()),
+            TermNode::Ifte(m, n1, n2) => ifte(m.into(), n1.into(), n2.into()),
         }
     }
 }

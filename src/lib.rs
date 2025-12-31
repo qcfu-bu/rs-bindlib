@@ -802,47 +802,40 @@ where
     boxed_apply(apply3(g, ta, tb, tc), td)
 }
 
-pub trait IntoBoxed<A>
-where
-    Self: Sized,
-{
-    fn into_box(self) -> Boxed<A>;
-}
-
-impl<A: Clone + 'static> IntoBoxed<A> for Var<A> {
-    fn into_box(self) -> Boxed<A> {
-        self.inner.boxed.clone()
+impl<A: Clone + 'static> From<Var<A>> for Boxed<A> {
+    fn from(var: Var<A>) -> Boxed<A> {
+        var.inner.boxed.clone()
     }
 }
 
-impl<A, B> IntoBoxed<Binder<A, B>> for Binder<A, Boxed<B>>
+impl<A, B> From<Binder<A, Boxed<B>>> for Boxed<Binder<A, B>>
 where
     A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
     B: Clone + 'static,
 {
-    fn into_box(self) -> Boxed<Binder<A, B>> {
-        let (xs, t) = self.unbind();
+    fn from(binder: Binder<A, Boxed<B>>) -> Boxed<Binder<A, B>> {
+        let (xs, t) = binder.unbind();
         Binder::bind_var(xs, t)
     }
 }
 
-impl<A, B> IntoBoxed<MBinder<A, B>> for MBinder<A, Boxed<B>>
+impl<A, B> From<MBinder<A, Boxed<B>>> for Boxed<MBinder<A, B>>
 where
     A: Into<Rc<dyn Any>> + From<Rc<dyn Any>> + Clone + 'static,
     B: Clone + 'static,
 {
-    fn into_box(self) -> Boxed<MBinder<A, B>> {
-        let (xs, t) = self.unbind();
+    fn from(mbinder: MBinder<A, Boxed<B>>) -> Boxed<MBinder<A, B>> {
+        let (xs, t) = mbinder.unbind();
         MBinder::bind_mvar(xs, t)
     }
 }
 
-impl<A> IntoBoxed<Option<A>> for Option<Boxed<A>>
+impl<A> From<Option<Boxed<A>>> for Boxed<Option<A>>
 where
     A: Clone + 'static,
 {
-    fn into_box(self) -> Boxed<Option<A>> {
-        if let Some(a) = self {
+    fn from(opt: Option<Boxed<A>>) -> Boxed<Option<A>> {
+        if let Some(a) = opt {
             match a.inner {
                 BoxedInner::Box(t) => {
                     return boxed(Some(t.clone()));
@@ -858,18 +851,18 @@ where
     }
 }
 
-impl<A, T1, T2> IntoBoxed<T2> for T1
+impl<A, T1, T2> From<T1> for Boxed<T2>
 where
     A: Clone + 'static,
     T1: IntoIterator<Item = Boxed<A>> + FromIterator<Boxed<A>> + 'static,
     T2: FromIterator<A> + 'static,
 {
-    fn into_box(self) -> Boxed<T2> {
+    fn from(val: T1) -> Boxed<T2> {
         let mut b = true;
         let mut vars = vec![];
         let mut clos = vec![];
         let mut n = 0;
-        for a in self.into_iter() {
+        for a in val.into_iter() {
             match a.inner {
                 BoxedInner::Box(t) => {
                     clos.push(Closure::new(move |_, _| t.clone()));
