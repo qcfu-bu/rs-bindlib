@@ -18,9 +18,9 @@ panic = "abort"
 debug = true
 
 [dependencies]
-rpmalloc = "0.2.2"
 ahash = "0.8.11"
 itertools = "0.14.0"
 pest = "2.7.9"
 pest_derive = "2.7.9"
 lazy_static = "1.4.0"
+mimalloc = "0.1.48"

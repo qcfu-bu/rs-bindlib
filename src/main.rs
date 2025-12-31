@@ -4,9 +4,9 @@ mod eval;
 mod parse;
 mod trans01;
 
-use rpmalloc::RpMalloc;
+use mimalloc::MiMalloc;
 #[global_allocator]
-static GLOBAL_ALLOC: RpMalloc = RpMalloc;
+static GLOBAL_ALLOC: MiMalloc = MiMalloc;
 
 use ahash::HashMap;
 use parse::*;
