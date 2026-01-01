@@ -99,16 +99,16 @@ impl<T> Clo<T> {
 }
 
 #[derive(Clone)]
-struct VarInner<A> {
-    name: String,
-    mk_free: Rc<dyn Fn(Var<A>) -> A>,
-    boxed: Boxed<A>,
+pub struct Var<A> {
+    key: usize,
+    inner: Rc<Var_<A>>,
 }
 
 #[derive(Clone)]
-pub struct Var<A> {
-    key: usize,
-    inner: Rc<VarInner<A>>,
+struct Var_<A> {
+    name: String,
+    mk_free: Rc<dyn Fn(Var<A>) -> A>,
+    boxed: Boxed<A>,
 }
 
 impl<A> Debug for Var<A> {
@@ -149,14 +149,14 @@ impl<A: From<Rc<dyn Any>> + 'static> Var<A> {
     }
 
     fn build(key: usize, mk_free: Rc<dyn Fn(Var<A>) -> A>, name: String) -> Self {
-        let x = Rc::new_cyclic(|wk: &Weak<VarInner<A>>| {
+        let x = Rc::new_cyclic(|wk: &Weak<Var_<A>>| {
             let clo = Clo::new(move |vp, env| {
                 let i = vp.inner.borrow()[&key];
                 env.get::<A>(i)
             });
             let wk = AnyVar::from(key, wk.clone());
             let boxed = Boxed::mk_env(vec![wk], 0, clo);
-            VarInner {
+            Var_ {
                 name,
                 mk_free,
                 boxed,
@@ -208,11 +208,11 @@ impl AnyVar {
 
 #[derive(Clone)]
 pub struct Boxed<A> {
-    inner: BoxedInner<A>,
+    inner: Boxed_<A>,
 }
 
 #[derive(Clone)]
-enum BoxedInner<A> {
+enum Boxed_<A> {
     Box(A),
     Env(Vec<AnyVar>, usize, Clo<A>),
 }
@@ -220,13 +220,13 @@ enum BoxedInner<A> {
 impl<A: 'static> Boxed<A> {
     fn mk_box(value: A) -> Self {
         Boxed {
-            inner: BoxedInner::Box(value),
+            inner: Boxed_::Box(value),
         }
     }
 
     fn mk_env(vs: Vec<AnyVar>, n: usize, t: Clo<A>) -> Self {
         Boxed {
-            inner: BoxedInner::Env(vs, n, t),
+            inner: Boxed_::Env(vs, n, t),
         }
     }
 
@@ -235,8 +235,8 @@ impl<A: 'static> Boxed<A> {
         A: Into<Rc<dyn Any>> + Clone + 'static,
     {
         match self.inner {
-            BoxedInner::Box(t) => t,
-            BoxedInner::Env(vs, nb, t) => {
+            Boxed_::Box(t) => t,
+            Boxed_::Env(vs, nb, t) => {
                 let nbvs = vs.len();
                 let env = Env::new(nbvs + nb);
                 let mut cur = 0;
@@ -320,7 +320,7 @@ fn minimize<A: 'static>(xs: Vec<AnyVar>, n: usize, t: Clo<A>) -> Clo<A> {
 
 #[derive(Clone)]
 pub struct Binder<A, B> {
-    var: Rc<VarInner<A>>,
+    var: Rc<Var_<A>>,
     bind: bool,
     rank: usize,
     value: Rc<dyn Fn(A) -> B>,
@@ -429,13 +429,13 @@ where
 
     pub fn bind_var(x: Var<A>, b: Boxed<B>) -> Boxed<Binder<A, B>> {
         match b.inner {
-            BoxedInner::Box(t) => Boxed::mk_box(Binder {
+            Boxed_::Box(t) => Boxed::mk_box(Binder {
                 var: x.inner,
                 bind: false,
                 rank: 0,
                 value: Rc::new(move |_| t.clone()),
             }),
-            BoxedInner::Env(xs, n, t) => {
+            Boxed_::Env(xs, n, t) => {
                 if xs.len() == 1 && x.key == xs[0].key {
                     let vp = Pos::new();
                     vp.inner.borrow_mut().insert(x.key, 0);
@@ -468,7 +468,7 @@ where
 
 #[derive(Clone)]
 pub struct MBinder<A, B> {
-    vars: Vec<Rc<VarInner<A>>>,
+    vars: Vec<Rc<Var_<A>>>,
     binds: Vec<bool>,
     rank: usize,
     value: Rc<dyn Fn(Vec<A>) -> B>,
@@ -570,7 +570,7 @@ where
 
     fn bind_mvar_aux3(
         t: Clo<B>,
-        vars: Vec<Rc<VarInner<A>>>,
+        vars: Vec<Rc<Var_<A>>>,
         rank: usize,
         binds: Vec<bool>,
         pos: Pos,
@@ -608,7 +608,7 @@ where
 
     fn bind_mvar_aux5(
         t: Clo<B>,
-        vars: Vec<Rc<VarInner<A>>>,
+        vars: Vec<Rc<Var_<A>>>,
         rank: usize,
         binds: Vec<bool>,
         pos: Pos,
@@ -625,7 +625,7 @@ where
 
     pub fn bind_mvar(xs: Vec<Var<A>>, b: Boxed<B>) -> Boxed<MBinder<A, B>> {
         match b.inner {
-            BoxedInner::Box(t) => {
+            Boxed_::Box(t) => {
                 let mut vars = vec![];
                 let mut binds = vec![];
                 for x in xs.iter() {
@@ -642,7 +642,7 @@ where
                     }),
                 })
             }
-            BoxedInner::Env(mut vs, n, t) => {
+            Boxed_::Env(mut vs, n, t) => {
                 let mut keys = vec![];
                 let mut vars = vec![];
                 let mut binds = vec![];
@@ -721,10 +721,10 @@ where
     F: Fn(A) -> B + Clone + 'static,
 {
     match (f.inner, a.inner) {
-        (BoxedInner::Box(f), BoxedInner::Box(a)) => Boxed::mk_box(f(a)),
-        (BoxedInner::Box(f), BoxedInner::Env(va, na, ta)) => Boxed::mk_env(va, na, ta.map(f)),
-        (BoxedInner::Env(vf, nf, tf), BoxedInner::Box(a)) => Boxed::mk_env(vf, nf, tf.app(a)),
-        (BoxedInner::Env(vf, nf, tf), BoxedInner::Env(va, na, ta)) => {
+        (Boxed_::Box(f), Boxed_::Box(a)) => Boxed::mk_box(f(a)),
+        (Boxed_::Box(f), Boxed_::Env(va, na, ta)) => Boxed::mk_env(va, na, ta.map(f)),
+        (Boxed_::Env(vf, nf, tf), Boxed_::Box(a)) => Boxed::mk_env(vf, nf, tf.app(a)),
+        (Boxed_::Env(vf, nf, tf), Boxed_::Env(va, na, ta)) => {
             let vs = merge_unique(&vf, &va);
             let clof = minimize(vf, nf, tf);
             let cloa = minimize(va, na, ta);
@@ -738,7 +738,7 @@ where
     A: Clone + 'static,
 {
     Boxed {
-        inner: BoxedInner::Box(a),
+        inner: Boxed_::Box(a),
     }
 }
 
@@ -749,8 +749,8 @@ where
     F: Fn(A) -> B + Clone + 'static,
 {
     match ta.inner {
-        BoxedInner::Box(a) => Boxed::mk_box(f(a)),
-        BoxedInner::Env(xs, na, ta) => Boxed::mk_env(xs, na, ta.map(f)),
+        Boxed_::Box(a) => Boxed::mk_box(f(a)),
+        Boxed_::Env(xs, na, ta) => Boxed::mk_env(xs, na, ta.map(f)),
     }
 }
 
@@ -840,8 +840,8 @@ where
     fn from(opt: Option<Boxed<A>>) -> Boxed<Option<A>> {
         match opt {
             Some(a) => match a.inner {
-                BoxedInner::Box(t) => boxed(Some(t)),
-                BoxedInner::Env(vs, n, t) => {
+                Boxed_::Box(t) => boxed(Some(t)),
+                Boxed_::Env(vs, n, t) => {
                     let clo = Clo::new(move |vp, env| Some((t.inner)(vp, env)));
                     Boxed::mk_env(vs, n, clo)
                 }
@@ -859,8 +859,8 @@ where
     fn from(opt: Result<Boxed<A>, E>) -> Boxed<Result<A, E>> {
         match opt {
             Ok(a) => match a.inner {
-                BoxedInner::Box(t) => boxed(Ok(t)),
-                BoxedInner::Env(vs, n, t) => {
+                Boxed_::Box(t) => boxed(Ok(t)),
+                Boxed_::Env(vs, n, t) => {
                     let clo = Clo::new(move |vp, env| Ok((t.inner)(vp, env)));
                     Boxed::mk_env(vs, n, clo)
                 }
@@ -883,10 +883,10 @@ where
         let mut n = 0;
         for a in val.into_iter() {
             match a.inner {
-                BoxedInner::Box(t) => {
+                Boxed_::Box(t) => {
                     clos.push(Clo::new(move |_, _| t.clone()));
                 }
-                BoxedInner::Env(vs, na, ta) => {
+                Boxed_::Env(vs, na, ta) => {
                     b = false;
                     n = cmp::max(na, n);
                     vars = merge_unique(&vars, &vs);
