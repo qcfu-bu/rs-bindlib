@@ -644,29 +644,28 @@ where
             }
             BoxedInner::Env(mut vs, n, t) => {
                 let mut keys = vec![];
+                let mut vars = vec![];
+                let mut binds = vec![];
                 let mut m = n;
-                for x in xs.iter() {
+                for x in &xs {
+                    vars.push(x.inner.clone());
                     if let Some(vs1) = remove(x, &vs) {
                         vs = vs1;
                         m += 1;
                         keys.push(Some(x.key));
+                        binds.push(true);
                     } else {
                         keys.push(None);
+                        binds.push(false);
                     }
                 }
                 if vs.is_empty() {
-                    let mut vars = vec![];
-                    let mut binds = vec![];
                     let mut cur_pos = 0;
                     let vp = Pos::new();
-                    for (i, key) in keys.iter().enumerate() {
-                        vars.push(xs[i].inner.clone());
+                    for key in &keys {
                         if let Some(k) = key {
                             vp.inner.borrow_mut().insert(*k, cur_pos);
-                            binds.push(true);
                             cur_pos += 1;
-                        } else {
-                            binds.push(false);
                         }
                     }
                     let value = Self::bind_mvar_aux1(binds.clone(), t, vp, Env::new(m));
@@ -679,36 +678,31 @@ where
                 } else if m == n {
                     let rank = vs.len();
                     let clo = Clo::new(move |vp, env| {
-                        let mut vars = vec![];
-                        let mut binds = vec![];
-                        for x in xs.iter() {
-                            vars.push(x.inner.clone());
-                            binds.push(false);
-                        }
-                        Self::bind_mvar_aux3(t.clone(), vars, rank, binds, vp.clone(), env.clone())
+                        Self::bind_mvar_aux3(
+                            t.clone(),
+                            vars.clone(),
+                            rank,
+                            binds.clone(),
+                            vp.clone(),
+                            env.clone(),
+                        )
                     });
                     Boxed::mk_env(vs, m, clo)
                 } else {
                     let rank = vs.len();
                     let clo = Clo::new(move |vp, env| {
-                        let mut vars = vec![];
-                        let mut binds = vec![];
                         let mut cur_pos = rank;
-                        for (i, key) in keys.iter().enumerate() {
-                            vars.push(xs[i].inner.clone());
+                        for key in &keys {
                             if let Some(k) = key {
                                 vp.inner.borrow_mut().insert(*k, cur_pos);
-                                binds.push(true);
                                 cur_pos += 1;
-                            } else {
-                                binds.push(false);
                             }
                         }
                         MBinder::bind_mvar_aux5(
                             t.clone(),
-                            vars,
+                            vars.clone(),
                             rank,
-                            binds,
+                            binds.clone(),
                             vp.clone(),
                             env.clone(),
                         )
