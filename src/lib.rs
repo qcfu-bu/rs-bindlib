@@ -446,7 +446,8 @@ where
                         bind: true,
                         value,
                     });
-                } else if let Some(xs) = remove(&x, &xs) {
+                }
+                if let Some(xs) = remove(&x, &xs) {
                     let key = x.key;
                     let rank = xs.len();
                     let clo = Clo::new(move |vp, env| {
